@@ -1,3 +1,8 @@
+*   Move `respond_with` (and the class-level `respond_to`) to
+    the `responders` gem.
+
+    *José Valim*
+
 *   Remove deprecated `AbstractController::Helpers::ClassMethods::MissingHelperError`
     in favor of `AbstractController::Helpers::MissingHelperError`.
 
