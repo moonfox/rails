@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveModel
   # Raised when forbidden attributes are used for mass assignment.
   #
@@ -15,13 +17,15 @@ module ActiveModel
   end
 
   module ForbiddenAttributesProtection # :nodoc:
-    protected
+    private
       def sanitize_for_mass_assignment(attributes)
-        if attributes.respond_to?(:permitted?) && !attributes.permitted?
-          raise ActiveModel::ForbiddenAttributesError
+        if attributes.respond_to?(:permitted?)
+          raise ActiveModel::ForbiddenAttributesError if !attributes.permitted?
+          attributes.to_h
         else
           attributes
         end
       end
+      alias :sanitize_forbidden_attributes :sanitize_for_mass_assignment
   end
 end

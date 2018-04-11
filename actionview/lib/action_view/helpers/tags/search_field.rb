@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActionView
   module Helpers
     module Tags # :nodoc:
@@ -16,6 +18,7 @@ module ActionView
             options["incremental"] = true unless options.has_key?("incremental")
           end
 
+          @options = options
           super
         end
       end

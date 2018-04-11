@@ -1,36 +1,33 @@
-require 'active_support/per_thread_registry'
+# frozen_string_literal: true
+
+require "active_support/per_thread_registry"
+require "active_support/notifications"
 
 module ActiveSupport
   # ActiveSupport::Subscriber is an object set to consume
   # ActiveSupport::Notifications. The subscriber dispatches notifications to
   # a registered object based on its given namespace.
   #
-  # An example would be Active Record subscriber responsible for collecting
+  # An example would be an Active Record subscriber responsible for collecting
   # statistics about queries:
   #
   #   module ActiveRecord
   #     class StatsSubscriber < ActiveSupport::Subscriber
+  #       attach_to :active_record
+  #
   #       def sql(event)
   #         Statsd.timing("sql.#{event.payload[:name]}", event.duration)
   #       end
   #     end
   #   end
   #
-  # And it's finally registered as:
-  #
-  #   ActiveRecord::StatsSubscriber.attach_to :active_record
-  #
-  # Since we need to know all instance methods before attaching the log
-  # subscriber, the line above should be called after your subscriber definition.
-  #
   # After configured, whenever a "sql.active_record" notification is published,
   # it will properly dispatch the event (ActiveSupport::Notifications::Event) to
   # the +sql+ method.
   class Subscriber
     class << self
-
       # Attach the subscriber to a namespace.
-      def attach_to(namespace, subscriber=new, notifier=ActiveSupport::Notifications)
+      def attach_to(namespace, subscriber = new, notifier = ActiveSupport::Notifications)
         @namespace  = namespace
         @subscriber = subscriber
         @notifier   = notifier
@@ -57,21 +54,20 @@ module ActiveSupport
         @@subscribers ||= []
       end
 
-      protected
+      private
+        attr_reader :subscriber, :notifier, :namespace
 
-      attr_reader :subscriber, :notifier, :namespace
+        def add_event_subscriber(event) # :doc:
+          return if %w{ start finish }.include?(event.to_s)
 
-      def add_event_subscriber(event)
-        return if %w{ start finish }.include?(event.to_s)
+          pattern = "#{event}.#{namespace}"
 
-        pattern = "#{event}.#{namespace}"
+          # Don't add multiple subscribers (eg. if methods are redefined).
+          return if subscriber.patterns.include?(pattern)
 
-        # don't add multiple subscribers (eg. if methods are redefined)
-        return if subscriber.patterns.include?(pattern)
-
-        subscriber.patterns << pattern
-        notifier.subscribe(pattern, subscriber)
-      end
+          subscriber.patterns << pattern
+          notifier.subscribe(pattern, subscriber)
+        end
     end
 
     attr_reader :patterns # :nodoc:
@@ -96,7 +92,7 @@ module ActiveSupport
       event.end = finished
       event.payload.merge!(payload)
 
-      method = name.split('.').first
+      method = name.split(".".freeze).first
       send(method, event)
     end
 

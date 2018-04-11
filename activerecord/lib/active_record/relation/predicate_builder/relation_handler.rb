@@ -1,12 +1,18 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   class PredicateBuilder
     class RelationHandler # :nodoc:
       def call(attribute, value)
-        if value.select_values.empty?
-          value = value.select(value.klass.arel_table[value.klass.primary_key])
+        if value.eager_loading?
+          value = value.send(:apply_join_dependency)
         end
 
-        attribute.in(value.arel.ast)
+        if value.select_values.empty?
+          value = value.select(value.arel_attribute(value.klass.primary_key))
+        end
+
+        attribute.in(value.arel)
       end
     end
   end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveSupport
   # A typical module looks like this:
   #
@@ -95,7 +97,7 @@ module ActiveSupport
   #   end
   #
   #   class Host
-  #     include Bar # works, Bar takes care now of its dependencies
+  #     include Bar # It works, now Bar takes care of its dependencies
   #   end
   module Concern
     class MultipleIncludedBlocks < StandardError #:nodoc:
@@ -111,10 +113,10 @@ module ActiveSupport
     def append_features(base)
       if base.instance_variable_defined?(:@_dependencies)
         base.instance_variable_get(:@_dependencies) << self
-        return false
+        false
       else
         return false if base < self
-        @_dependencies.each { |dep| base.send(:include, dep) }
+        @_dependencies.each { |dep| base.include(dep) }
         super
         base.extend const_get(:ClassMethods) if const_defined?(:ClassMethods)
         base.class_eval(&@_included_block) if instance_variable_defined?(:@_included_block)
@@ -132,7 +134,7 @@ module ActiveSupport
     end
 
     def class_methods(&class_methods_module_definition)
-      mod = const_defined?(:ClassMethods) ?
+      mod = const_defined?(:ClassMethods, false) ?
         const_get(:ClassMethods) :
         const_set(:ClassMethods, Module.new)
 

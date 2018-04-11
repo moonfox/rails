@@ -1,7 +1,11 @@
-require 'active_support/core_ext/module/remove_method'
-require 'action_controller'
-require 'action_controller/test_case'
-require 'action_view'
+# frozen_string_literal: true
+
+require "active_support/core_ext/module/redefine_method"
+require "action_controller"
+require "action_controller/test_case"
+require "action_view"
+
+require "rails-dom-testing"
 
 module ActionView
   # = Action View Test Case
@@ -16,17 +20,17 @@ module ActionView
       end
 
       def controller_path=(path)
-        self.class.controller_path=(path)
+        self.class.controller_path = (path)
       end
 
       def initialize
         super
         self.class.controller_path = ""
-        @request = ActionController::TestRequest.new
-        @response = ActionController::TestResponse.new
+        @request = ActionController::TestRequest.create(self.class)
+        @response = ActionDispatch::TestResponse.new
 
-        @request.env.delete('PATH_INFO')
-        @params = {}
+        @request.env.delete("PATH_INFO")
+        @params = ActionController::Parameters.new
       end
     end
 
@@ -34,6 +38,7 @@ module ActionView
       extend ActiveSupport::Concern
 
       include ActionDispatch::Assertions, ActionDispatch::TestProcess
+      include Rails::Dom::Testing::Assertions
       include ActionController::TemplateAssertions
       include ActionView::Context
 
@@ -46,7 +51,7 @@ module ActionView
 
       include ActiveSupport::Testing::ConstantLookup
 
-      delegate :lookup_context, :to => :controller
+      delegate :lookup_context, to: :controller
       attr_accessor :controller, :output_buffer, :rendered
 
       module ClassMethods
@@ -68,7 +73,7 @@ module ActionView
         def helper_method(*methods)
           # Almost a duplicate from ActionController::Helpers
           methods.flatten.each do |method|
-            _helpers.module_eval <<-end_eval
+            _helpers.module_eval <<-end_eval, __FILE__, __LINE__ + 1
               def #{method}(*args, &block)                    # def current_user(*args, &block)
                 _test_case.send(%(#{method}), *args, &block)  #   _test_case.send(%(current_user), *args, &block)
               end                                             # end
@@ -93,14 +98,16 @@ module ActionView
           helper(helper_class) if helper_class
           include _helpers
         end
-
       end
 
       def setup_with_controller
         @controller = ActionView::TestCase::TestController.new
         @request = @controller.request
-        @output_buffer = ActiveSupport::SafeBuffer.new
-        @rendered = ''
+        @view_flow = ActionView::OutputFlow.new
+        # empty string ensures buffer has UTF-8 encoding as
+        # new without arguments returns ASCII-8BIT encoded buffer like String#new
+        @output_buffer = ActiveSupport::SafeBuffer.new ""
+        @rendered = "".dup
 
         make_test_case_available_to_view!
         say_no_to_protect_against_forgery!
@@ -120,6 +127,11 @@ module ActionView
         @_rendered_views ||= RenderedViewsCollection.new
       end
 
+      def _routes
+        @controller._routes if @controller.respond_to?(:_routes)
+      end
+
+      # Need to experiment if this priority is the best one: rendered => output_buffer
       class RenderedViewsCollection
         def initialize
           @rendered_views ||= Hash.new { |hash, key| hash[key] = [] }
@@ -140,27 +152,26 @@ module ActionView
 
         def view_rendered?(view, expected_locals)
           locals_for(view).any? do |actual_locals|
-            expected_locals.all? {|key, value| value == actual_locals[key] }
+            expected_locals.all? { |key, value| value == actual_locals[key] }
           end
         end
       end
 
       included do
         setup :setup_with_controller
+        ActiveSupport.run_load_hooks(:action_view_test_case, self)
       end
 
     private
 
-      # Support the selector assertions
-      #
       # Need to experiment if this priority is the best one: rendered => output_buffer
-      def response_from_page
-        HTML::Document.new(@rendered.blank? ? @output_buffer : @rendered).root
+      def document_root_element
+        Nokogiri::HTML::Document.parse(@rendered.blank? ? @output_buffer : @rendered).root
       end
 
       def say_no_to_protect_against_forgery!
         _helpers.module_eval do
-          remove_possible_method :protect_against_forgery?
+          silence_redefinition_of_method :protect_against_forgery?
           def protect_against_forgery?
             false
           end
@@ -200,10 +211,10 @@ module ActionView
       def view
         @view ||= begin
           view = @controller.view_context
-          view.singleton_class.send :include, _helpers
+          view.singleton_class.include(_helpers)
           view.extend(Locals)
-          view.rendered_views = self.rendered_views
-          view.output_buffer = self.output_buffer
+          view.rendered_views = rendered_views
+          view.output_buffer = output_buffer
           view
         end
       end
@@ -236,7 +247,9 @@ module ActionView
         :@test_passed,
         :@view,
         :@view_context_class,
-        :@_subscribers
+        :@view_flow,
+        :@_subscribers,
+        :@html_document
       ]
 
       def _user_defined_ivars
@@ -253,18 +266,32 @@ module ActionView
         end]
       end
 
-      def _routes
-        @controller._routes if @controller.respond_to?(:_routes)
-      end
-
       def method_missing(selector, *args)
-        if @controller.respond_to?(:_routes) &&
-          ( @controller._routes.named_routes.route_defined?(selector) ||
-            @controller._routes.mounted_helpers.method_defined?(selector) )
+        begin
+          routes = @controller.respond_to?(:_routes) && @controller._routes
+        rescue
+          # Don't call routes, if there is an error on _routes call
+        end
+
+        if routes &&
+           (routes.named_routes.route_defined?(selector) ||
+             routes.mounted_helpers.method_defined?(selector))
           @controller.__send__(selector, *args)
         else
           super
         end
+      end
+
+      def respond_to_missing?(name, include_private = false)
+        begin
+          routes = @controller.respond_to?(:_routes) && @controller._routes
+        rescue
+          # Don't call routes, if there is an error on _routes call
+        end
+
+        routes &&
+          (routes.named_routes.route_defined?(name) ||
+           routes.mounted_helpers.method_defined?(name))
       end
     end
 

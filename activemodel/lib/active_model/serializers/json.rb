@@ -1,4 +1,6 @@
-require 'active_support/json'
+# frozen_string_literal: true
+
+require "active_support/json"
 
 module ActiveModel
   module Serializers
@@ -10,8 +12,7 @@ module ActiveModel
       included do
         extend ActiveModel::Naming
 
-        class_attribute :include_root_in_json
-        self.include_root_in_json = false
+        class_attribute :include_root_in_json, instance_writer: false, default: false
       end
 
       # Returns a hash representing the model. Some configuration can be
@@ -93,7 +94,7 @@ module ActiveModel
         end
 
         if root
-          root = self.class.model_name.element if root == true
+          root = model_name.element if root == true
           { root => serializable_hash(options) }
         else
           serializable_hash(options)
@@ -130,11 +131,11 @@ module ActiveModel
       #
       #   json = { person: { name: 'bob', age: 22, awesome:true } }.to_json
       #   person = Person.new
-      #   person.from_json(json) # => #<Person:0x007fec5e7a0088 @age=22, @awesome=true, @name="bob">
-      #   person.name            # => "bob"
-      #   person.age             # => 22
-      #   person.awesome         # => true
-      def from_json(json, include_root=include_root_in_json)
+      #   person.from_json(json, true) # => #<Person:0x007fec5e7a0088 @age=22, @awesome=true, @name="bob">
+      #   person.name                  # => "bob"
+      #   person.age                   # => 22
+      #   person.awesome               # => true
+      def from_json(json, include_root = include_root_in_json)
         hash = ActiveSupport::JSON.decode(json)
         hash = hash.values.first if include_root
         self.attributes = hash

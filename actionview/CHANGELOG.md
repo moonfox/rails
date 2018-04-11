@@ -1,165 +1,58 @@
-*   Add I18n support for input/textarea placeholder text.
+*   Remove `ActionView::Helpers::RecordTagHelper`.
 
-    Placeholder I18n follows the same convention as `label` I18n.
+    *Yoshiyuki Hirano*
 
-    *Alex Robbin*
+*   Disable `ActionView::Template` finalizers in test environment.
 
-*   Fix that render layout: 'messages/layout' should also be added to the dependency tracker tree.
+    Template finalization can be expensive in large view test suites.
+    Add a configuration option,
+    `action_view.finalize_compiled_template_methods`, and turn it off in
+    the test environment.
 
-    *DHH*
+    *Simon Coffey*
 
-*   Add `PartialIteration` object used when rendering collections.
+*   Extract the `confirm` call in its own, overridable method in `rails_ujs`.
+    Example :
+        Rails.confirm = function(message, element) {
+          return (my_bootstrap_modal_confirm(message));
+        }
 
-    The iteration object is available as the local variable
-    `#{template_name}_iteration` when rendering partials with collections.
+    *Mathieu Mahé*
 
-    It gives access to the `size` of the collection being iterated over,
-    the current `index` and two convenience methods `first?` and `last?`.
+*   Enable select tag helper to mark `prompt` option as `selected` and/or `disabled` for `required`
+    field. Example:
 
-    *Joel Junström*, *Lucas Uyezu*
+        select :post,
+               :category,
+               ["lifestyle", "programming", "spiritual"],
+               { selected: "", disabled: "", prompt: "Choose one" },
+               { required: true }
 
-*   Return an absolute instead of relative path from an asset url in the case
-    of the `asset_host` proc returning nil
+    Placeholder option would be selected and disabled. The HTML produced:
 
-    *Jolyon Pawlyn*
-
-*   Fix `html_escape_once` to properly handle hex escape sequences (e.g. &#x1a2b;)
-
-    *John F. Douthat*
-
-*   Added String support for min and max properties for date field helpers.
-
-    *Todd Bealmear*
-
-*   The `highlight` helper now accepts a block to be used instead of the `highlighter`
-    option.
-
-    *Lucas Mazza*
-
-*   The `except` and `highlight` helpers now accept regular expressions.
-
-    *Jan Szumiec*
-
-*   Flatten the array parameter in `safe_join`, so it behaves consistently with
-    `Array#join`.
-
-    *Paul Grayson*
-
-*   Honor `html_safe` on array elements in tag values, as we do for plain string
-    values.
-
-    *Paul Grayson*
-
-*   Add `ActionView::Template::Handler.unregister_template_handler`.
-
-    It performs the opposite of `ActionView::Template::Handler.register_template_handler`.
-
-    *Zuhao Wan*
-
-*   Bring `cache_digest` rake tasks up-to-date with the latest API changes
-
-    *Jiri Pospisil*
-
-*   Allow custom `:host` option to be passed to `asset_url` helper that
-    overwrites `config.action_controller.asset_host` for particular asset.
-
-    *Hubert Łępicki*
-
-*   Deprecate `AbstractController::Base.parent_prefixes`.
-    Override `AbstractController::Base.local_prefixes` when you want to change
-    where to find views.
-
-    *Nick Sutterer*
-
-*   Take label values into account when doing I18n lookups for model attributes.
-
-    The following:
-
-        # form.html.erb
-        <%= form_for @post do |f| %>
-          <%= f.label :type, value: "long" %>
-        <% end %>
-
-        # en.yml
-        en:
-          activerecord:
-            attributes:
-              post/long: "Long-form Post"
-
-    Used to simply return "long", but now it will return "Long-form
-    Post".
-
-    *Joshua Cody*
-
-*   Change `asset_path` to use File.join to create proper paths:
-
-    Before:
-
-        https://some.host.com//assets/some.js
-
-    After:
-
-        https://some.host.com/assets/some.js
-
-    *Peter Schröder*
-
-*   Change `favicon_link_tag` default mimetype from `image/vnd.microsoft.icon` to
-    `image/x-icon`.
-
-    Before:
-
-        #=> favicon_link_tag 'myicon.ico'
-        <link href="/assets/myicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon" />
-
-    After:
-
-        #=> favicon_link_tag 'myicon.ico'
-        <link href="/assets/myicon.ico" rel="shortcut icon" type="image/x-icon" />
-
-    *Geoffroy Lorieux*
-
-*   Remove wrapping div with inline styles for hidden form fields.
-
-    We are dropping HTML 4.01 and XHTML strict compliance since input tags directly
-    inside a form are valid HTML5, and the absence of inline styles help in validating
-    for Content Security Policy.
-
-    *Joost Baaij*
-
-*   `collection_check_boxes` respects `:index` option for the hidden filed name.
-
-    Fixes #14147.
-
-    *Vasiliy Ermolovich*
-
-*   `date_select` helper with option `with_css_classes: true` does not overwrite other classes.
-
-    *Izumi Wong-Horiuchi*
-
-*   `number_to_percentage` does not crash with `Float::NAN` or `Float::INFINITY`
-    as input.
-
-    Fixes #14405.
-
-    *Yves Senn*
-
-*   Add `include_hidden` option to `collection_check_boxes` helper.
-
-    *Vasiliy Ermolovich*
-
-*   Fixed a problem where the default options for the `button_tag` helper is not
-    applied correctly.
-
-    Fixes #14254.
+        <select required="required" name="post[category]" id="post_category">
+        <option disabled="disabled" selected="selected" value="">Choose one</option>
+        <option value="lifestyle">lifestyle</option>
+        <option value="programming">programming</option>
+        <option value="spiritual">spiritual</option></select>
 
     *Sergey Prikhodko*
 
-*   Take variants into account when calculating template digests in ActionView::Digestor.
+*   Don't enforce UTF-8 by default.
 
-    The arguments to ActionView::Digestor#digest are now being passed as a hash
-    to support variants and allow more flexibility in the future. The support for
-    regular (required) arguments is deprecated and will be removed in Rails 5.0 or later.
+    With the disabling of TLS 1.0 by most major websites, continuing to run
+    IE8 or lower becomes increasingly difficult so default to not enforcing
+    UTF-8 encoding as it's not relevant to other browsers.
 
-    *Piotr Chmolowski, Łukasz Strzałkowski*
+    *Andrew White*
 
-Please check [4-1-stable](https://github.com/rails/rails/blob/4-1-stable/actionview/CHANGELOG.md) for previous changes.
+*   Change translation key of `submit_tag` from `module_name_class_name` to `module_name/class_name`.
+
+    *Rui Onodera*
+
+*   Rails 6 requires Ruby 2.4.1 or newer.
+
+    *Jeremy Daer*
+
+
+Please check [5-2-stable](https://github.com/rails/rails/blob/5-2-stable/actionview/CHANGELOG.md) for previous changes.

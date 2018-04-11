@@ -1,4 +1,14 @@
+# frozen_string_literal: true
+
 module Enumerable
+  # Enumerable#sum was added in Ruby 2.4, but it only works with Numeric elements
+  # when we omit an identity.
+
+  # We can't use Refinements here because Refinements with Module which will be prepended
+  # doesn't work well https://bugs.ruby-lang.org/issues/13446
+  alias :_original_sum_with_required_identity :sum
+  private :_original_sum_with_required_identity
+
   # Calculates a sum from the elements.
   #
   #  payments.sum { |p| p.price * p.tax_rate }
@@ -12,28 +22,32 @@ module Enumerable
   #
   #  [5, 15, 10].sum # => 30
   #  ['foo', 'bar'].sum # => "foobar"
-  #  [[1, 2], [3, 1, 5]].sum => [1, 2, 3, 1, 5]
+  #  [[1, 2], [3, 1, 5]].sum # => [1, 2, 3, 1, 5]
   #
   # The default sum of an empty list is zero. You can override this default:
   #
   #  [].sum(Payment.new(0)) { |i| i.amount } # => Payment.new(0)
-  def sum(identity = 0, &block)
-    if block_given?
+  def sum(identity = nil, &block)
+    if identity
+      _original_sum_with_required_identity(identity, &block)
+    elsif block_given?
       map(&block).sum(identity)
     else
-      inject { |sum, element| sum + element } || identity
+      inject(:+) || 0
     end
   end
 
   # Convert an enumerable to a hash.
   #
   #   people.index_by(&:login)
-  #     => { "nextangle" => <Person ...>, "chade-" => <Person ...>, ...}
+  #   # => { "nextangle" => <Person ...>, "chade-" => <Person ...>, ...}
   #   people.index_by { |person| "#{person.first_name} #{person.last_name}" }
-  #     => { "Chade- Fowlersburg-e" => <Person ...>, "David Heinemeier Hansson" => <Person ...>, ...}
+  #   # => { "Chade- Fowlersburg-e" => <Person ...>, "David Heinemeier Hansson" => <Person ...>, ...}
   def index_by
     if block_given?
-      Hash[map { |elem| [yield(elem), elem] }]
+      result = {}
+      each { |elem| result[yield(elem)] = elem }
+      result
     else
       to_enum(:index_by) { size if respond_to?(:size) }
     end
@@ -60,21 +74,67 @@ module Enumerable
   def exclude?(object)
     !include?(object)
   end
+
+  # Returns a copy of the enumerable without the specified elements.
+  #
+  #   ["David", "Rafael", "Aaron", "Todd"].without "Aaron", "Todd"
+  #   # => ["David", "Rafael"]
+  #
+  #   {foo: 1, bar: 2, baz: 3}.without :bar
+  #   # => {foo: 1, baz: 3}
+  def without(*elements)
+    reject { |element| elements.include?(element) }
+  end
+
+  # Convert an enumerable to an array based on the given key.
+  #
+  #   [{ name: "David" }, { name: "Rafael" }, { name: "Aaron" }].pluck(:name)
+  #   # => ["David", "Rafael", "Aaron"]
+  #
+  #   [{ id: 1, name: "David" }, { id: 2, name: "Rafael" }].pluck(:id, :name)
+  #   # => [[1, "David"], [2, "Rafael"]]
+  def pluck(*keys)
+    if keys.many?
+      map { |element| keys.map { |key| element[key] } }
+    else
+      map { |element| element[keys.first] }
+    end
+  end
 end
 
 class Range #:nodoc:
   # Optimize range sum to use arithmetic progression if a block is not given and
   # we have a range of numeric values.
-  def sum(identity = 0)
+  def sum(identity = nil)
     if block_given? || !(first.is_a?(Integer) && last.is_a?(Integer))
       super
     else
       actual_last = exclude_end? ? (last - 1) : last
       if actual_last >= first
-        (actual_last - first + 1) * (actual_last + first) / 2
+        sum = identity || 0
+        sum + (actual_last - first + 1) * (actual_last + first) / 2
       else
-        identity
+        identity || 0
       end
+    end
+  end
+end
+
+# Using Refinements here in order not to expose our internal method
+using Module.new {
+  refine Array do
+    alias :orig_sum :sum
+  end
+}
+
+class Array #:nodoc:
+  # Array#sum was added in Ruby 2.4 but it only works with Numeric elements.
+  def sum(init = nil, &block)
+    if init.is_a?(Numeric) || first.is_a?(Numeric)
+      init ||= 0
+      orig_sum(init, &block)
+    else
+      super
     end
   end
 end
